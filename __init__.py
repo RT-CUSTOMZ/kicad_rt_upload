@@ -8,7 +8,7 @@ from pathlib import Path
 
 majorVersion = int(pcbnew.Version().split(".")[0]) 
 FILEPATH = 'uv_export/'
-BASE_URL = 'http://127.0.0.1:8000/upload?'
+BASE_URL = 'http://10.10.13.190:8000/upload?'
 
 
 def getProjectBasePath():
@@ -16,7 +16,6 @@ def getProjectBasePath():
     parts = board_path.rpartition('/')
     return str(parts[0]+parts[1])
 
-base_path = getProjectBasePath()
 
 class UploadDialog(wx.Dialog): 
    def __init__(self, parent, title): 
@@ -102,7 +101,7 @@ class RtUvUploadPlugin(pcbnew.ActionPlugin):
 
         popt.SetOutputDirectory(FILEPATH)
 
-        # wx.MessageBox(base_path)
+        # wx.MessageBox(getProjectBasePath())
         dlg = UploadDialog(None, "RT UV Upload")
         match dlg.ShowModal():
             case wx.ID_OK:
@@ -126,13 +125,11 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
     headers = {'Content-Type': 'text/plain'}
     gbrs = getFilePaths()
     for f in gbrs:
-        wx.MessageBox("Sending "+str(f))
         with open(file=f, mode='r') as data:
             if f.name.endswith('F_Cu_UV.gbr'):
                 params['layer'] = 'Top'
             if f.name.endswith('B_Cu_UV.gbr'):
                 params['layer'] = 'Bottom'
-                wx.MessageBox(data.readline())
             params['filename'] = f.name
             if not data.readable():
                 wx.MessageBox("Error reading from "+f.name)
@@ -142,7 +139,7 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
             data.close()
 
 def getFilePaths():
-    p = Path(base_path+FILEPATH)
+    p = Path(getProjectBasePath()+FILEPATH)
     files = list(p.glob('**/*.gbr'))
     gerbers = []
     for f in files:
