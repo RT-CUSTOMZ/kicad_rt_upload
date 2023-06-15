@@ -4,9 +4,19 @@ import pcbnew
 import os
 from urllib.request import *
 import urllib.parse
+from pathlib import Path
 
 majorVersion = int(pcbnew.Version().split(".")[0]) 
 FILEPATH = 'uv_export/'
+BASE_URL = 'http://127.0.0.1:8000/upload?'
+
+
+def getProjectBasePath():
+    board_path = pcbnew.GetBoard().GetFileName()
+    parts = board_path.rpartition('/')
+    return str(parts[0]+parts[1])
+
+base_path = getProjectBasePath()
 
 class UploadDialog(wx.Dialog): 
    def __init__(self, parent, title): 
@@ -26,7 +36,7 @@ class UploadDialog(wx.Dialog):
 
         exposure_box = wx.BoxSizer(wx.VERTICAL)
         exposure_box.Add(wx.StaticText(panel, -1, "Exposure (seconds)"), flag = wx.ALIGN_LEFT)
-        self.exposure = wx.SpinCtrl(panel, size = (120, 30), min = 1, max = 1200, initial = 50)
+        self.exposure = wx.SpinCtrl(panel, size = (120, 30), min = 1, max = 1200, initial = 15)
         exposure_box.Add(self.exposure, flag = wx.ALIGN_LEFT)
         hbox1.Add(exposure_box, border = 5, flag = wx.ALL)
 
@@ -85,7 +95,6 @@ class RtUvUploadPlugin(pcbnew.ActionPlugin):
         if not pcb_file_name:
             wx.MessageBox('Please save the board file before generating manufacturing data.')
             return
-        print(pcb_file_name)
 
         board = pcbnew.LoadBoard(pcb_file_name)
         pctl = pcbnew.PLOT_CONTROLLER(board)
@@ -93,13 +102,13 @@ class RtUvUploadPlugin(pcbnew.ActionPlugin):
 
         popt.SetOutputDirectory(FILEPATH)
 
-        # wx.MessageBox("test")
+        # wx.MessageBox(base_path)
         dlg = UploadDialog(None, "RT UV Upload")
         match dlg.ShowModal():
             case wx.ID_OK:
                 generateGerberForUV(pctl, popt, board)
                 # And now upload, display errors in message box if any
-                uploadGerbers(dlg.username, dlg.exposure, dlg.x_offset, dlg.y_offset)
+                uploadGerbers(dlg.username.GetLineText(0), dlg.exposure.GetValue(), dlg.x_offset.GetValue(), dlg.y_offset.GetValue())
                 
 
 
@@ -107,19 +116,42 @@ plugin = RtUvUploadPlugin()
 plugin.register() 
 
 def uploadGerbers(user, exposure, offset_x, offset_y):
-    base_url = "http://10.10.13.190:8000/upload?"
     params = {}
     if user != "":
         params['user'] = user
-    params['exposure'] = str(user)
+    params['exposure'] = exposure
     params['offset_x'] = offset_x
     params['offset_y'] = offset_y
 
-    params['layer'] = 'Bottom'
-    url = base_url + urllib.parse.urlencode(params)
     headers = {'Content-Type': 'text/plain'}
-    # data = open(file=filepath_bottom)
-    # Request(url, headers=headers, method="POST")
+    gbrs = getFilePaths()
+    for f in gbrs:
+        wx.MessageBox("Sending "+str(f))
+        with open(file=f, mode='r') as data:
+            if f.name.endswith('F_Cu_UV.gbr'):
+                params['layer'] = 'Top'
+            if f.name.endswith('B_Cu_UV.gbr'):
+                params['layer'] = 'Bottom'
+                wx.MessageBox(data.readline())
+            params['filename'] = f.name
+            if not data.readable():
+                wx.MessageBox("Error reading from "+f.name)
+            url = BASE_URL + urllib.parse.urlencode(params)
+            req = Request(url, data=data, headers=headers, method="POST")
+            urlopen(req)
+            data.close()
+
+def getFilePaths():
+    p = Path(base_path+FILEPATH)
+    files = list(p.glob('**/*.gbr'))
+    gerbers = []
+    for f in files:
+        if f.name.endswith('F_Cu_UV.gbr'):
+            gerbers.append(f)
+        if f.name.endswith('B_Cu_UV.gbr'):
+            gerbers.append(f)
+    return gerbers
+
 
 def generateGerberForUV(plotControl, plotOptions, board):
 
@@ -166,8 +198,4 @@ def generateGerberForUV(plotControl, plotOptions, board):
         plotControl.OpenPlotfile(
             "B.Cu.UV", pcbnew.PLOT_FORMAT_GERBER, "Bottom Copper UV")
         plotControl.PlotLayers(seq)
-   
-def getGbrFilenames():
-    from os import listdir
-    from os.path import isfile, join
-    files = [f for f in listdir(FILEPATH) if isfile(join(FILEPATH, f))]
+    plotControl.ClosePlot()
