@@ -103,11 +103,10 @@ class RtUvUploadPlugin(pcbnew.ActionPlugin):
 
         # wx.MessageBox(getProjectBasePath())
         dlg = UploadDialog(None, "RT UV Upload")
-        match dlg.ShowModal():
-            case wx.ID_OK:
-                generateGerberForUV(pctl, popt, board)
-                # And now upload, display errors in message box if any
-                uploadGerbers(dlg.username.GetLineText(0), dlg.exposure.GetValue(), dlg.x_offset.GetValue(), dlg.y_offset.GetValue())
+        if dlg.ShowModal() == wx.ID_OK:
+            generateGerberForUV(pctl, popt, board)
+            # And now upload, display errors in message box if any
+            uploadGerbers(dlg.username.GetLineText(0), dlg.exposure.GetValue(), dlg.x_offset.GetValue(), dlg.y_offset.GetValue())
                 
 
 
