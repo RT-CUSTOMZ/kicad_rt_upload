@@ -18,7 +18,10 @@ def getProjectBasePath():
 
 
 class UploadDialog(wx.Dialog): 
-   def __init__(self, parent, title): 
+    def __init__(self, parent, title, pctl, popt, board): 
+        self.pctl = pctl
+        self.popt = popt
+        self.board = board
         super(UploadDialog, self).__init__(parent, title = title) 
         panel = wx.Panel(self) 
 
@@ -58,16 +61,25 @@ class UploadDialog(wx.Dialog):
         vbox.Add(hbox2, flag = wx.ALIGN_CENTER)
         vbox.AddSpacer(20)
 
-        self.ok = wx.Button(panel, wx.ID_OK, label = "Upload", size = (70,30))
+        self.upload = wx.Button(panel, label = "Upload", size = (70,30))
         self.cancel = wx.Button(panel, wx.ID_CANCEL, label = "Cancel", size = (70,30))
         confirmation_box = wx.BoxSizer(wx.HORIZONTAL)
         confirmation_box.Add(self.cancel, flag = wx.ALIGN_RIGHT|wx.ALL, border = 5)
-        confirmation_box.Add(self.ok, flag = wx.ALIGN_RIGHT|wx.ALL, border = 5)
+        confirmation_box.Add(self.upload, flag = wx.ALIGN_RIGHT|wx.ALL, border = 5)
 
         vbox.Add(confirmation_box, flag = wx.ALIGN_BOTTOM|wx.ALIGN_RIGHT)
         vbox.SetMinSize((200, 0))
         panel.SetSizer(vbox)
         vbox.SetSizeHints(self)
+
+        self.Bind(wx.EVT_BUTTON, self.onUploadClick, self.upload)
+    def onUploadClick(self, event):
+        wx.MessageBox("onUploadClick")
+        generateGerberForUV(self.pctl, self.popt, self.board)
+        # And now upload, display errors in message box if any
+        uploadGerbers(self.username.GetLineText(0), self.exposure.GetValue(), self.x_offset.GetValue(), self.y_offset.GetValue())
+        self.Close(true)
+
 
         
 
@@ -101,13 +113,12 @@ class RtUvUploadPlugin(pcbnew.ActionPlugin):
 
         popt.SetOutputDirectory(FILEPATH)
 
-        # wx.MessageBox(getProjectBasePath())
-        dlg = UploadDialog(None, "RT UV Upload")
+        if len(getProjectBasePath()) == 0:
+            wx.MessageBox("Failed to evaluate Project Base Path! Please restart KiCad!")
+        dlg = UploadDialog(None, "RT UV Upload", pctl, popt, board)
         if dlg.ShowModal() == wx.ID_OK:
-            generateGerberForUV(pctl, popt, board)
-            # And now upload, display errors in message box if any
-            uploadGerbers(dlg.username.GetLineText(0), dlg.exposure.GetValue(), dlg.x_offset.GetValue(), dlg.y_offset.GetValue())
-                
+            # TODO
+            return
 
 
 plugin = RtUvUploadPlugin()
@@ -123,7 +134,11 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
 
     headers = {'Content-Type': 'text/plain'}
     gbrs = getFilePaths()
+    wx.MessageBox(str(gbrs))
+    if len(gbrs) == 0:
+        wx.MessageBox("Can't find Gerber files for upload")
     for f in gbrs:
+        wx.MessageBox(f.name)
         with open(file=f, mode='r') as data:
             if f.name.endswith('F_Cu_UV.gbr'):
                 params['layer'] = 'Top'
@@ -134,7 +149,18 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
                 wx.MessageBox("Error reading from "+f.name)
             url = BASE_URL + urllib.parse.urlencode(params)
             req = Request(url, data=data, headers=headers, method="POST")
-            urlopen(req)
+            wx.MessageBox("Uploading...")
+            response = urlopen(req)
+            try:
+                if response.status >= 300:
+                    wx.MessageBox("Upload failed with status code "+str(response.status)+"\n"+response.read())
+                    return
+            except:
+                wx.MessageBox("Can't reach Server!")
+                return
+            else:
+                wx.MessageBox("Succeeded to upload "+f.name)
+            wx.MessageBox("After Upload")
             data.close()
 
 def getFilePaths():
