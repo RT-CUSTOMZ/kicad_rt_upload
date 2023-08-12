@@ -1,5 +1,7 @@
+from urllib.error import HTTPError
 import wx
 import wx.aui
+import wx.adv
 import pcbnew
 import os
 from urllib.request import *
@@ -8,7 +10,7 @@ from pathlib import Path
 
 majorVersion = int(pcbnew.Version().split(".")[0]) 
 FILEPATH = 'uv_export/'
-BASE_URL = 'http://10.10.13.190:8000/upload?'
+BASE_URL = 'http://127.0.0.1:8000/'
 
 
 def getProjectBasePath():
@@ -16,6 +18,22 @@ def getProjectBasePath():
     parts = board_path.rpartition('/')
     return str(parts[0]+parts[1])
 
+class UploadFinishedDialog(wx.Dialog):
+    def __init__(self, parent, id1, id2):
+        super(UploadFinishedDialog, self).__init__(parent, title = "Upload finished!")
+        panel = wx.Panel(self)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+
+        text = wx.StaticText(panel, -1, "Upload successful, view the status by following the links:")
+        vbox.Add(text)
+        id1_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + 'status?upload_id=' + id1.decode())
+        vbox.Add(id1_url)
+        id2_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + 'status?upload_id=' + id2.decode())
+        vbox.Add(id2_url)
+        panel.SetSizer(vbox)
+        vbox.SetSizeHints(self)
+
+        
 
 class UploadDialog(wx.Dialog): 
     def __init__(self, parent, title, pctl, popt, board): 
@@ -30,7 +48,7 @@ class UploadDialog(wx.Dialog):
         hbox2 = wx.BoxSizer(wx.HORIZONTAL)
 
         username_box = wx.BoxSizer(wx.VERTICAL)
-        username_box.Add(wx.StaticText(panel, -1, "User Name"), flag = wx.ALIGN_LEFT)
+        username_box.Add(wx.StaticText(panel, -1, "User/Project Name"), flag = wx.ALIGN_LEFT)
         self.username = wx.TextCtrl(panel, size = (180, 30))
         username_box.Add(self.username, proportion = 0)
         hbox1.Add(username_box, border = 5, flag = wx.ALL)
@@ -74,11 +92,12 @@ class UploadDialog(wx.Dialog):
 
         self.Bind(wx.EVT_BUTTON, self.onUploadClick, self.upload)
     def onUploadClick(self, event):
-        wx.MessageBox("onUploadClick")
         generateGerberForUV(self.pctl, self.popt, self.board)
         # And now upload, display errors in message box if any
-        uploadGerbers(self.username.GetLineText(0), self.exposure.GetValue(), self.x_offset.GetValue(), self.y_offset.GetValue())
-        self.Close(true)
+        ids = uploadGerbers(self.username.GetLineText(0), self.exposure.GetValue(), self.x_offset.GetValue(), self.y_offset.GetValue())
+        if len(ids) == 2:
+            UploadFinishedDialog(self, ids[0], ids[1]).ShowModal()
+        self.EndModal(wx.ID_OK)
 
 
         
@@ -125,6 +144,8 @@ plugin = RtUvUploadPlugin()
 plugin.register() 
 
 def uploadGerbers(user, exposure, offset_x, offset_y):
+    ids = []
+
     params = {}
     if user != "":
         params['user'] = user
@@ -134,11 +155,9 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
 
     headers = {'Content-Type': 'text/plain'}
     gbrs = getFilePaths()
-    wx.MessageBox(str(gbrs))
     if len(gbrs) == 0:
         wx.MessageBox("Can't find Gerber files for upload")
     for f in gbrs:
-        wx.MessageBox(f.name)
         with open(file=f, mode='r') as data:
             if f.name.endswith('F_Cu_UV.gbr'):
                 params['layer'] = 'Top'
@@ -147,21 +166,20 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
             params['filename'] = f.name
             if not data.readable():
                 wx.MessageBox("Error reading from "+f.name)
-            url = BASE_URL + urllib.parse.urlencode(params)
+            url = BASE_URL + 'upload?' + urllib.parse.urlencode(params)
             req = Request(url, data=data, headers=headers, method="POST")
-            wx.MessageBox("Uploading...")
-            response = urlopen(req)
             try:
-                if response.status >= 300:
-                    wx.MessageBox("Upload failed with status code "+str(response.status)+"\n"+response.read())
-                    return
-            except:
-                wx.MessageBox("Can't reach Server!")
+                resp = urlopen(req)
+                if resp.status == 202:
+                    ids.append(resp.read())
+            except HTTPError as err:
+                wx.MessageBox("Upload error, code "+str(err.code))
                 return
-            else:
-                wx.MessageBox("Succeeded to upload "+f.name)
-            wx.MessageBox("After Upload")
+            except:
+                wx.MessageBox("Error uploading "+f.name+"\nServer not reachable?")
+                return
             data.close()
+    return ids
 
 def getFilePaths():
     p = Path(getProjectBasePath()+FILEPATH)
