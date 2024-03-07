@@ -10,7 +10,8 @@ from pathlib import Path
 
 majorVersion = int(pcbnew.Version().split(".")[0]) 
 FILEPATH = 'uv_export/'
-BASE_URL = 'http://127.0.0.1:8000/'
+BASE_URL = 'http://10.10.13.190:8000/'
+DEFAULT_EXPOSURE = 60
 
 
 def getProjectBasePath():
@@ -56,7 +57,7 @@ class UploadDialog(wx.Dialog):
 
         exposure_box = wx.BoxSizer(wx.VERTICAL)
         exposure_box.Add(wx.StaticText(panel, -1, "Exposure (seconds)"), flag = wx.ALIGN_LEFT)
-        self.exposure = wx.SpinCtrl(panel, size = (120, 30), min = 1, max = 1200, initial = 15)
+        self.exposure = wx.SpinCtrl(panel, size = (120, 30), min = 1, max = 1200, initial = DEFAULT_EXPOSURE)
         exposure_box.Add(self.exposure, flag = wx.ALIGN_LEFT)
         hbox1.Add(exposure_box, border = 5, flag = wx.ALL)
 
@@ -159,9 +160,9 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
         wx.MessageBox("Can't find Gerber files for upload")
     for f in gbrs:
         with open(file=f, mode='r') as data:
-            if f.name.endswith('F_Cu_UV.gbr'):
+            if f.name.endswith('TOP.gbr'):
                 params['layer'] = 'Top'
-            if f.name.endswith('B_Cu_UV.gbr'):
+            if f.name.endswith('BOT.gbr'):
                 params['layer'] = 'Bottom'
             params['filename'] = f.name
             if not data.readable():
@@ -186,9 +187,9 @@ def getFilePaths():
     files = list(p.glob('**/*.gbr'))
     gerbers = []
     for f in files:
-        if f.name.endswith('F_Cu_UV.gbr'):
+        if f.name.endswith('TOP.gbr'):
             gerbers.append(f)
-        if f.name.endswith('B_Cu_UV.gbr'):
+        if f.name.endswith('BOT.gbr'):
             gerbers.append(f)
     return gerbers
 
@@ -214,12 +215,12 @@ def generateGerberForUV(plotControl, plotOptions, board):
         plotOptions.SetExcludeEdgeLayer(False)
         plotControl.SetLayer(pcbnew.F_Cu)
         plotControl.OpenPlotfile(
-            "F.Cu.UV", pcbnew.PLOT_FORMAT_GERBER, "Top Copper UV")
+            "TOP", pcbnew.PLOT_FORMAT_GERBER, "Top Copper UV")
         plotControl.PlotLayer()
 
         plotControl.SetLayer(pcbnew.B_Cu)
         plotControl.OpenPlotfile(
-            "B.Cu.UV", pcbnew.PLOT_FORMAT_GERBER, "Bottom Copper UV")
+            "BOT", pcbnew.PLOT_FORMAT_GERBER, "Bottom Copper UV")
         plotControl.PlotLayer()
 
     else:
@@ -228,7 +229,7 @@ def generateGerberForUV(plotControl, plotOptions, board):
         seq.push_back(pcbnew.F_Cu)
         plotControl.SetLayer(pcbnew.F_Cu)
         plotControl.OpenPlotfile(
-            "F.Cu.UV", pcbnew.PLOT_FORMAT_GERBER, "Top Copper UV")
+            "TOP", pcbnew.PLOT_FORMAT_GERBER, "Top Copper UV")
         plotControl.PlotLayers(seq)
 
         seq = pcbnew.LSEQ()
@@ -236,6 +237,6 @@ def generateGerberForUV(plotControl, plotOptions, board):
         seq.push_back(pcbnew.B_Cu)
         plotControl.SetLayer(pcbnew.B_Cu)
         plotControl.OpenPlotfile(
-            "B.Cu.UV", pcbnew.PLOT_FORMAT_GERBER, "Bottom Copper UV")
+            "BOT", pcbnew.PLOT_FORMAT_GERBER, "Bottom Copper UV")
         plotControl.PlotLayers(seq)
     plotControl.ClosePlot()
