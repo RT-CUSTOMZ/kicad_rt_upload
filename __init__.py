@@ -20,17 +20,17 @@ def getProjectBasePath():
     return str(parts[0]+parts[1])
 
 class UploadFinishedDialog(wx.Dialog):
-    def __init__(self, parent, id1, id2):
+    def __init__(self, parent, id_top, id_bot):
         super(UploadFinishedDialog, self).__init__(parent, title = "Upload finished!")
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
-        text = wx.StaticText(panel, -1, "Upload successful, view the status by following the links:")
+        text = wx.StaticText(panel, -1, "Upload successful, view the status by following the link:")
         vbox.Add(text)
-        id1_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + 'status?upload_id=' + id1.decode())
+        id1_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + '?top=' + id_top.decode() + '&bot=' + id_bot.decode())
         vbox.Add(id1_url)
-        id2_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + 'status?upload_id=' + id2.decode())
-        vbox.Add(id2_url)
+        # id2_url = wx.adv.HyperlinkCtrl(panel, url = BASE_URL + 'status?upload_id=' + id2.decode())
+        # vbox.Add(id2_url)
         panel.SetSizer(vbox)
         vbox.SetSizeHints(self)
 
@@ -97,7 +97,7 @@ class UploadDialog(wx.Dialog):
         # And now upload, display errors in message box if any
         ids = uploadGerbers(self.username.GetLineText(0), self.exposure.GetValue(), self.x_offset.GetValue(), self.y_offset.GetValue())
         if len(ids) == 2:
-            UploadFinishedDialog(self, ids[0], ids[1]).ShowModal()
+            UploadFinishedDialog(self, ids['Top'], ids['Bottom']).ShowModal()
         self.EndModal(wx.ID_OK)
 
 
@@ -145,7 +145,7 @@ plugin = RtUvUploadPlugin()
 plugin.register() 
 
 def uploadGerbers(user, exposure, offset_x, offset_y):
-    ids = []
+    ids = {}
 
     params = {}
     if user != "":
@@ -172,7 +172,7 @@ def uploadGerbers(user, exposure, offset_x, offset_y):
             try:
                 resp = urlopen(req)
                 if resp.status == 202:
-                    ids.append(resp.read())
+                    ids[params['layer']] = resp.read()
             except HTTPError as err:
                 wx.MessageBox("Upload error, code "+str(err.code))
                 return
