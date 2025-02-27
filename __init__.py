@@ -197,7 +197,7 @@ def getFilePaths():
 def generateGerberForUV(plotControl, plotOptions, board):
 
     plotOptions.SetMirror(False)
-    plotOptions.SetPlotViaOnMaskLayer(True)
+    # plotOptions.SetPlotViaOnMaskLayer(True) # not available on kicad 9.0 anymore (also not needed probably)
 
     plotOptions.SetPlotValue(False)
     plotOptions.SetPlotReference(False)
